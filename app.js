@@ -1,8 +1,8 @@
-// === Import 必須全部用 CDN ===
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
-import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
-import { GLTFLoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/GLTFLoader.js";
-import { RGBELoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/RGBELoader.js";
+// 這裡只用裸模組名稱，真正網址由 importmap 決定
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 console.log("Metal Viewer Web — app.js loaded");
 
@@ -24,24 +24,28 @@ container.appendChild(renderer.domElement);
 
 // === Scene & Camera ===
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+const camera = new THREE.PerspectiveCamera(
+  45,
+  container.clientWidth / container.clientHeight,
+  0.1,
+  100
+);
 camera.position.set(0, 0.7, 1.2);
 
 // === Controls ===
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// === 光源（避免過暗）===
+// === Basic Light ===
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
 scene.add(hemi);
 
-// === 狀態 ===
+// === State ===
 let currentModel = null;
 let currentMaterialList = [];
 let envMap = null;
 let bgMode = 0; // 0 = HDR, 1 = 黑背景
 
-// 更新材質
 function updateMaterialSettings() {
   currentMaterialList.forEach((mat) => {
     if (!mat) return;
@@ -51,7 +55,7 @@ function updateMaterialSettings() {
   });
 }
 
-// === 載入 GLB ===
+// === Load GLB ===
 document.getElementById("model-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -69,7 +73,6 @@ document.getElementById("model-input").addEventListener("change", (e) => {
       currentModel = gltf.scene;
       scene.add(currentModel);
 
-      // 收集所有 Mesh 材質
       currentMaterialList = [];
       currentModel.traverse((obj) => {
         if (obj.isMesh) {
@@ -83,7 +86,7 @@ document.getElementById("model-input").addEventListener("change", (e) => {
       statusBox.textContent = "模型載入完成";
       URL.revokeObjectURL(url);
     },
-    (xhr) => {},
+    undefined,
     (err) => {
       console.error(err);
       statusBox.textContent = "❌ 模型載入失敗";
@@ -91,7 +94,7 @@ document.getElementById("model-input").addEventListener("change", (e) => {
   );
 });
 
-// === 載入 HDR ===
+// === Load HDR ===
 document.getElementById("hdr-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -108,12 +111,13 @@ document.getElementById("hdr-input").addEventListener("change", (e) => {
 
       envMap = texture;
 
-      // 設定為背景與反射
       if (bgMode === 0) scene.background = texture;
       scene.environment = texture;
 
-      // 套用到材質
-      currentMaterialList.forEach((m) => (m.envMap = envMap));
+      currentMaterialList.forEach((m) => {
+        m.envMap = envMap;
+        m.needsUpdate = true;
+      });
 
       statusBox.textContent = "HDR 已載入完成";
       URL.revokeObjectURL(url);
@@ -126,11 +130,11 @@ document.getElementById("hdr-input").addEventListener("change", (e) => {
   );
 });
 
-// === UI：金屬 & 粗糙度 ===
+// === UI: sliders ===
 metalSlider.addEventListener("input", updateMaterialSettings);
 roughSlider.addEventListener("input", updateMaterialSettings);
 
-// === UI：背景切換 ===
+// === UI: background toggle ===
 bgToggle.addEventListener("click", () => {
   bgMode = (bgMode + 1) % 2;
 
@@ -143,17 +147,16 @@ bgToggle.addEventListener("click", () => {
   }
 });
 
-// === 匯出 PNG ===
+// === Screenshot ===
 screenshotBtn.addEventListener("click", () => {
   const url = renderer.domElement.toDataURL("image/png");
-
   const a = document.createElement("a");
   a.href = url;
   a.download = "capture.png";
   a.click();
 });
 
-// === 視窗調整 ===
+// === Resize ===
 window.addEventListener("resize", () => {
   const w = container.clientWidth;
   const h = container.clientHeight;
@@ -162,7 +165,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(w, h);
 });
 
-// === Render Loop ===
+// === Render loop ===
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
