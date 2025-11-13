@@ -4,6 +4,17 @@
   <meta charset="UTF-8" />
   <title>Metal Viewer Web</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- 讓瀏覽器知道 'three' / 'three/addons/' 是哪個 CDN URL -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+
   <style>
     * {
       box-sizing: border-box;
@@ -180,7 +191,7 @@
     </div>
   </div>
 
-  <!-- 這一行是唯一的 script，其他 script 標籤全部都不要 -->
+  <!-- 唯一一個 script：用 importmap 把 three 解析到 CDN -->
   <script type="module" src="./app.js"></script>
 </body>
 </html>
