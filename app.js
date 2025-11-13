@@ -1,5 +1,171 @@
-// app.js
+// === Import 必須全部用 CDN ===
 import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
 import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/GLTFLoader.js";
-import { RGBELoader } from "https://unpkg.com/three@0.161.0/examples/js
+import { RGBELoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/RGBELoader.js";
+
+console.log("Metal Viewer Web — app.js loaded");
+
+// === DOM ===
+const container = document.getElementById("viewer-container");
+const statusBox = document.getElementById("status");
+const metalSlider = document.getElementById("metal-slider");
+const roughSlider = document.getElementById("roughness-slider");
+const bgToggle = document.getElementById("bg-toggle");
+const screenshotBtn = document.getElementById("screenshot-btn");
+
+// === Renderer ===
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+// === Scene & Camera ===
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+camera.position.set(0, 0.7, 1.2);
+
+// === Controls ===
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// === 光源（避免過暗）===
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+scene.add(hemi);
+
+// === 狀態 ===
+let currentModel = null;
+let currentMaterialList = [];
+let envMap = null;
+let bgMode = 0; // 0 = HDR, 1 = 黑背景
+
+// 更新材質
+function updateMaterialSettings() {
+  currentMaterialList.forEach((mat) => {
+    if (!mat) return;
+    mat.metalness = parseFloat(metalSlider.value);
+    mat.roughness = parseFloat(roughSlider.value);
+    mat.needsUpdate = true;
+  });
+}
+
+// === 載入 GLB ===
+document.getElementById("model-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const url = URL.createObjectURL(file);
+  const loader = new GLTFLoader();
+
+  statusBox.textContent = "載入 GLB 模型中...";
+
+  loader.load(
+    url,
+    (gltf) => {
+      if (currentModel) scene.remove(currentModel);
+
+      currentModel = gltf.scene;
+      scene.add(currentModel);
+
+      // 收集所有 Mesh 材質
+      currentMaterialList = [];
+      currentModel.traverse((obj) => {
+        if (obj.isMesh) {
+          const mat = obj.material;
+          currentMaterialList.push(mat);
+          if (envMap) mat.envMap = envMap;
+        }
+      });
+
+      updateMaterialSettings();
+      statusBox.textContent = "模型載入完成";
+      URL.revokeObjectURL(url);
+    },
+    (xhr) => {},
+    (err) => {
+      console.error(err);
+      statusBox.textContent = "❌ 模型載入失敗";
+    }
+  );
+});
+
+// === 載入 HDR ===
+document.getElementById("hdr-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const url = URL.createObjectURL(file);
+  const loader = new RGBELoader();
+
+  statusBox.textContent = "載入 HDR 環境中...";
+
+  loader.load(
+    url,
+    (texture) => {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+
+      envMap = texture;
+
+      // 設定為背景與反射
+      if (bgMode === 0) scene.background = texture;
+      scene.environment = texture;
+
+      // 套用到材質
+      currentMaterialList.forEach((m) => (m.envMap = envMap));
+
+      statusBox.textContent = "HDR 已載入完成";
+      URL.revokeObjectURL(url);
+    },
+    undefined,
+    (err) => {
+      console.error(err);
+      statusBox.textContent = "❌ HDR 載入失敗";
+    }
+  );
+});
+
+// === UI：金屬 & 粗糙度 ===
+metalSlider.addEventListener("input", updateMaterialSettings);
+roughSlider.addEventListener("input", updateMaterialSettings);
+
+// === UI：背景切換 ===
+bgToggle.addEventListener("click", () => {
+  bgMode = (bgMode + 1) % 2;
+
+  if (bgMode === 0) {
+    bgToggle.textContent = "背景：環境";
+    scene.background = envMap ? envMap : new THREE.Color(0x000000);
+  } else {
+    bgToggle.textContent = "背景：黑色";
+    scene.background = new THREE.Color(0x000000);
+  }
+});
+
+// === 匯出 PNG ===
+screenshotBtn.addEventListener("click", () => {
+  const url = renderer.domElement.toDataURL("image/png");
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "capture.png";
+  a.click();
+});
+
+// === 視窗調整 ===
+window.addEventListener("resize", () => {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// === Render Loop ===
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
