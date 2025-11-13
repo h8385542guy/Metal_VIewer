@@ -3,7 +3,6 @@ import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
 import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/GLTFLoader.js";
 import { RGBELoader } from "https://unpkg.com/three@0.161.0/examples/jsm/loaders/RGBELoader.js";
-import { PMREMGenerator } from "https://unpkg.com/three@0.161.0/examples/jsm/pmrem/PMREMGenerator.js";
 
 const container = document.getElementById("viewer-container");
 const statusEl = document.getElementById("status");
@@ -49,7 +48,7 @@ function init() {
   controls.maxDistance = 3;
   controls.target.set(0, 0.1, 0);
 
-  pmremGenerator = new PMREMGenerator(renderer);
+  pmremGenerator = new THREE.PMREMGenerator(renderer);
   pmremGenerator.compileEquirectangularShader();
 
   // 補一點柔光，避免 HDR 太暗時全黑
