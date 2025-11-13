@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
   <title>Metal Viewer Web</title>
@@ -180,12 +180,13 @@
   </header>
 
   <div id="viewer-container">
-    <!-- three.js 會把 canvas 插在這裡 -->
     <div id="status">請載入 GLB 模型與 HDR 環境圖。</div>
-    <div id="notice">本頁只在瀏覽器中運行。載入的 GLB/HDR 檔案僅在本機記憶體中處理，不會上傳到伺服器。</div>
+    <div id="notice">
+      本頁只在瀏覽器中運行。載入的 GLB/HDR 檔案僅在本機記憶體中處理，不會上傳到伺服器。
+    </div>
   </div>
 
-  <!-- 三維程式邏輯 -->
+  <!-- 只要這一行，其他 script 都不要再加 -->
   <script type="module" src="./app.js"></script>
 </body>
 </html>
