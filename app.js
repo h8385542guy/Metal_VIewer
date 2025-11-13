@@ -14,12 +14,10 @@ const roughnessSlider = document.getElementById("roughness-slider");
 const bgToggleBtn = document.getElementById("bg-toggle");
 
 let scene, camera, renderer, controls;
-let pmremGenerator;
 let currentEnvMap = null;
 let currentModel = null;
 let useEnvBackground = true;
 
-// 初始化 three.js 場景
 init();
 animate();
 
@@ -33,7 +31,10 @@ function init() {
   camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
   camera.position.set(0, 0.15, 1.4);
 
-  renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true, // 匯出 PNG 用
+  });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(width, height);
   renderer.outputEncoding = THREE.sRGBEncoding;
@@ -48,12 +49,8 @@ function init() {
   controls.maxDistance = 3;
   controls.target.set(0, 0.1, 0);
 
-  pmremGenerator = new THREE.PMREMGenerator(renderer);
-  pmremGenerator.compileEquirectangularShader();
-
-  // 補一點柔光，避免 HDR 太暗時全黑
-  const fillLight = new THREE.HemisphereLight(0xffffff, 0x202020, 0.4);
-  scene.add(fillLight);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x202020, 0.4);
+  scene.add(hemi);
 
   window.addEventListener("resize", onWindowResize);
 
@@ -78,12 +75,10 @@ function bindUI() {
 }
 
 function setStatus(text) {
-  if (statusEl) {
-    statusEl.textContent = text;
-  }
+  if (statusEl) statusEl.textContent = text;
 }
 
-// 載入 GLB 模型
+// －－ 載入 GLB 模型 －－
 function handleModelFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -95,16 +90,11 @@ function handleModelFile(event) {
   loader.load(
     url,
     (gltf) => {
-      if (currentModel) {
-        scene.remove(currentModel);
-      }
+      if (currentModel) scene.remove(currentModel);
 
       currentModel = gltf.scene;
 
-      // 自動置中與縮放到合適大小
       autoCenterAndScale(currentModel);
-
-      // 套用金屬材質參數
       applyMetalMaterial(currentModel);
 
       scene.add(currentModel);
@@ -114,13 +104,13 @@ function handleModelFile(event) {
     undefined,
     (err) => {
       console.error(err);
-      setStatus("載入模型失敗，請檢查檔案格式是否為 GLB/GLTF。");
+      setStatus("載入模型失敗，請確認檔案為 GLB/GLTF。");
       URL.revokeObjectURL(url);
     }
   );
 }
 
-// 載入 HDR 環境圖
+// －－ 載入 HDR 環境圖 －－
 function handleHDRFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -135,24 +125,22 @@ function handleHDRFile(event) {
       texture.mapping = THREE.EquirectangularReflectionMapping;
 
       if (currentEnvMap) {
-        currentEnvMap.dispose();
+        currentEnvMap.dispose?.();
       }
-
-      currentEnvMap = pmremGenerator.fromEquirectangular(texture).texture;
-      texture.dispose();
+      currentEnvMap = texture;
 
       scene.environment = currentEnvMap;
       if (useEnvBackground) {
         scene.background = currentEnvMap;
       }
 
-      // 更新現有模型的材質 envMapIntensity
       if (currentModel) {
         applyMetalMaterial(currentModel);
       }
 
       setStatus(`環境圖已載入：${file.name}`);
-      URL.revokeObjectURL(url);
+      // 不要馬上 revoke，讓 texture 還能用
+      // URL.revokeObjectURL(url);  // 可選：若發現問題再開
     },
     undefined,
     (err) => {
@@ -163,7 +151,7 @@ function handleHDRFile(event) {
   );
 }
 
-// 自動置中與縮放模型
+// －－ 模型置中＋縮放 －－
 function autoCenterAndScale(object) {
   const box = new THREE.Box3().setFromObject(object);
   const size = new THREE.Vector3();
@@ -171,12 +159,10 @@ function autoCenterAndScale(object) {
   box.getSize(size);
   box.getCenter(center);
 
-  // 將模型移到原點附近（略微移高）
   object.position.x += -center.x;
   object.position.y += -center.y + size.y * 0.02;
   object.position.z += -center.z;
 
-  // 將最大尺寸規範到約 0.6
   const maxDim = Math.max(size.x, size.y, size.z);
   if (maxDim > 0) {
     const scale = 0.6 / maxDim;
@@ -184,7 +170,7 @@ function autoCenterAndScale(object) {
   }
 }
 
-// 套用金屬材質（調整 metalness / roughness）
+// －－ 套用金屬材質參數 －－
 function applyMetalMaterial(root) {
   const metalness = parseFloat(metalSlider.value);
   const roughness = parseFloat(roughnessSlider.value);
@@ -192,8 +178,6 @@ function applyMetalMaterial(root) {
   root.traverse((child) => {
     if (child.isMesh) {
       const mat = child.material;
-
-      // 若是多層材質陣列
       if (Array.isArray(mat)) {
         mat.forEach((m) => tweakPBR(m, metalness, roughness));
       } else {
@@ -204,34 +188,24 @@ function applyMetalMaterial(root) {
 }
 
 function tweakPBR(material, metalness, roughness) {
-  if (!material || !("metalness" in material) || !("roughness" in material)) {
-    return;
-  }
+  if (!material || !("metalness" in material) || !("roughness" in material)) return;
 
   material.metalness = metalness;
   material.roughness = roughness;
 
-  // 讓反射強一點（假設環境圖有載入）
-  if (currentEnvMap) {
-    material.envMapIntensity = 1.2;
-  } else {
-    material.envMapIntensity = 0.4;
-  }
-
+  material.envMapIntensity = currentEnvMap ? 1.2 : 0.4;
   material.needsUpdate = true;
 }
 
-// 更新材質 slider
+// －－ slider 更新 －－
 function updateMaterialParams() {
   if (currentModel) {
     applyMetalMaterial(currentModel);
-    setStatus(
-      `金屬感：${metalSlider.value}   粗糙度：${roughnessSlider.value}`
-    );
+    setStatus(`金屬感：${metalSlider.value}   粗糙度：${roughnessSlider.value}`);
   }
 }
 
-// 背景切換：環境 / 純黑
+// －－ 背景切換：環境 / 黑色 －－
 function toggleBackground() {
   useEnvBackground = !useEnvBackground;
   if (useEnvBackground && currentEnvMap) {
@@ -243,12 +217,11 @@ function toggleBackground() {
   }
 }
 
-// 匯出 PNG
+// －－ 匯出 PNG 截圖 －－
 function handleScreenshot() {
-  // 先 render 一次確保畫面最新
   renderer.render(scene, camera);
-
   const dataURL = renderer.domElement.toDataURL("image/png");
+
   const a = document.createElement("a");
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   a.href = dataURL;
