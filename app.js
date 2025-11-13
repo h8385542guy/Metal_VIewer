@@ -30,7 +30,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.set(0, 0.7, 1.2);
+camera.position.set(0, 0.7, 1.2); // 初始值，載入模型後會被自動調整
 
 // === Controls ===
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -46,6 +46,34 @@ let currentMaterialList = [];
 let envMap = null;
 let bgMode = 0; // 0 = HDR, 1 = 黑背景
 
+// === 依據模型大小自動調整相機與控制器 ===
+function frameObject(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  const maxDim = Math.max(size.x, size.y, size.z) || 1.0;
+  const fitOffset = 1.5; // 越大鏡頭越遠一點
+  const fov = THREE.MathUtils.degToRad(camera.fov);
+  const fitDistance = (maxDim * fitOffset) / Math.tan(fov / 2);
+
+  // 設定相機位置：對準中心、拉到適合距離
+  camera.position.copy(center);
+  camera.position.add(new THREE.Vector3(0, maxDim * 0.3, fitDistance));
+
+  camera.near = maxDim / 100;
+  camera.far  = maxDim * 20;
+  camera.updateProjectionMatrix();
+
+  controls.target.copy(center);
+  controls.minDistance = maxDim * 0.1;
+  controls.maxDistance = maxDim * 10;
+  controls.update();
+}
+
+// === 更新材質參數 ===
 function updateMaterialSettings() {
   currentMaterialList.forEach((mat) => {
     if (!mat) return;
@@ -55,7 +83,7 @@ function updateMaterialSettings() {
   });
 }
 
-// === Load GLB ===
+// === 載入 GLB ===
 document.getElementById("model-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -68,11 +96,14 @@ document.getElementById("model-input").addEventListener("change", (e) => {
   loader.load(
     url,
     (gltf) => {
-      if (currentModel) scene.remove(currentModel);
+      if (currentModel) {
+        scene.remove(currentModel);
+      }
 
       currentModel = gltf.scene;
       scene.add(currentModel);
 
+      // 收集所有材質
       currentMaterialList = [];
       currentModel.traverse((obj) => {
         if (obj.isMesh) {
@@ -83,6 +114,8 @@ document.getElementById("model-input").addEventListener("change", (e) => {
       });
 
       updateMaterialSettings();
+      frameObject(currentModel);   // ★ 這裡自動框景 ★
+
       statusBox.textContent = "模型載入完成";
       URL.revokeObjectURL(url);
     },
@@ -94,7 +127,7 @@ document.getElementById("model-input").addEventListener("change", (e) => {
   );
 });
 
-// === Load HDR ===
+// === 載入 HDR ===
 document.getElementById("hdr-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
