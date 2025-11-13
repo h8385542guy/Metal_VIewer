@@ -15,12 +15,17 @@ const bgToggle = document.getElementById("bg-toggle");
 const screenshotBtn = document.getElementById("screenshot-btn");
 
 // === Renderer ===
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: false,
+  preserveDrawingBuffer: true,   // ★ 關鍵：保留畫面讓 toDataURL 可以抓
+});
 renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMappingExposure = 1.0;
 container.appendChild(renderer.domElement);
+
 
 // === Scene & Camera ===
 const scene = new THREE.Scene();
@@ -205,3 +210,4 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
